@@ -6,15 +6,15 @@ class User(models.Model):
     name = models.CharField(max_length=100)
     surname = models.CharField(max_length=100)
     birthDate = models.DateField(default=None, null=True)
-    image = models.CharField(null=True)
+    image = models.CharField(blank=True, null=True)
     email = models.EmailField(unique=True)
     password = models.CharField(max_length=255)
-    rate = models.IntegerField(default=0)
+    rate = models.FloatField(default=0)
     token = models.CharField(max_length=255)
     createdAt = models.DateField(auto_now_add=True)
-    market = models.ForeignKey('Market', on_delete=models.SET_NULL, null=True, related_name='user_market')
-    company = models.ForeignKey('Company', on_delete=models.SET_NULL, null=True, related_name='user_company')
-    role = models.ForeignKey('UserRole', on_delete=models.SET_NULL, null=True, related_name='user_role')
+    market = models.ForeignKey('Market', on_delete=models.SET_NULL, blank=True, null=True, related_name='user_market')
+    company = models.ForeignKey('Company', on_delete=models.SET_NULL, blank=True, null=True, related_name='user_company')
+    role = models.ForeignKey('UserRole', on_delete=models.SET_NULL, blank=True, null=True, related_name='user_role')
     
     def __str__(self) -> str:
         return self.email
@@ -24,15 +24,26 @@ class User(models.Model):
 # Market model start
 class Market(models.Model):
     name = models.CharField(max_length=255)
-    address = models.CharField(max_length=255)
+    address = models.CharField(max_length=255, blank=True, null=True)
     createdAt = models.DateField(auto_now_add=True)
-    workingTimeStart = models.TimeField(default=None, null=True)
-    workingTimeEnd = models.TimeField(default=None, null=True)
-    image = models.CharField()
-    owner = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='market_owner')
+    workingTimeStart = models.TimeField(default=None, blank=True, null=True)
+    workingTimeEnd = models.TimeField(default=None, blank=True, null=True)
+    image = models.CharField(blank=True, null=True)
+    owner = models.ForeignKey(User, on_delete=models.SET_NULL, blank=True, null=True, related_name='market_owner')
 
     def __str__(self) -> str:
         return self.name
+    
+    def getWorkersCount(self) -> int:
+        return User.objects.filter(market=self).count()
+    
+    def getTotalBalance(self):
+        result = {}
+        products = Product.objects.filter(market=self)
+        for el in products:
+            result[el.currency.token] = result.get(el.currency.token, 0) + el.count * el.price
+            
+        return result
 # Market model end
 
 
@@ -45,11 +56,13 @@ class Company(Market):
 # Product model start
 class Product(models.Model):
     name = models.CharField(max_length=200)
-    image = models.CharField()
-    market = models.ForeignKey('Market', on_delete=models.SET_NULL, null=True, related_name='product_market')
-    company = models.ForeignKey('Company', on_delete=models.SET_NULL, null=True, related_name='product_company')
-    price = models.IntegerField(default=0)
-    currency = models.ForeignKey('Currency', on_delete=models.SET_NULL, null=True, related_name='product_currency')
+    image = models.CharField(blank=True, null=True)
+    market = models.ForeignKey('Market', on_delete=models.SET_NULL, blank=True, null=True, related_name='product_market')
+    company = models.ForeignKey('Company', on_delete=models.SET_NULL, blank=True, null=True, related_name='product_company')
+    price = models.FloatField(default=0)
+    count = models.FloatField(default=0)
+    currency = models.ForeignKey('Currency', on_delete=models.SET_NULL, blank=True, null=True, related_name='product_currency')
+    countMethod = models.ForeignKey('CountMethod', on_delete=models.SET_NULL, blank=True, null=True, related_name='product_count_method')
 
     def __str__(self) -> str:
         return self.name
@@ -64,6 +77,15 @@ class Currency(models.Model):
     def __str__(self) -> str:
         return self.name
 # Currency model end
+
+# CountMethod model start
+class CountMethod(models.Model):
+    name = models.CharField(max_length=100)
+    token = models.CharField(max_length=50)
+
+    def __str__(self) -> str:
+        return self.name
+# CountMethod model end
 
 # UserRole model start
 class UserRole(models.Model):

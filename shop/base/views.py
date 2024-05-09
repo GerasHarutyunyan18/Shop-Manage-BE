@@ -1,11 +1,12 @@
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
 from django.views.decorators.csrf import csrf_exempt
-from .utils.errors import MethodNotAllowed, UserExist, UserNotExist, InvalidLoginCreds, AccessDenied
+from .utils.errors import MethodNotAllowed, UserExist, UserNotExist, InvalidLoginCreds, AccessDenied, MarketNotExist
 from .utils.constants import SECRET_KEY
 from django.core.mail import send_mail
 from .utils.helpers import generateUserPassword
 from .serializers.user import userSerializer
+from .serializers.market import marketSerializer
 import datetime
 import jwt
 from .utils.validators import signUpValidation, marketCreationValidation, userCreationValidation
@@ -174,6 +175,16 @@ class UserView:
 
         result = userSerializer(user)
         return JsonResponse({"success": True, "user": result})
+    
+    @csrf_exempt
+    def getByMarketId(request, marketPk):
+        if request.method != 'GET':
+            return JsonResponse(MethodNotAllowed)
+
+        users = User.objects.filter(market__pk=marketPk)
+
+        result = [userSerializer(user) for user in users]
+        return JsonResponse({"success": True, "data": result})
 # User service end
 
 # Market service class 
@@ -205,4 +216,35 @@ class MarketView:
         market = Market.objects.create(**result)
 
         return JsonResponse({'success': True, "id": market.pk})
+    
+    @csrf_exempt
+    def getUserMarkets(request, token):
+        if request.method != "GET":
+            return JsonResponse(MethodNotAllowed)
+        
+        user = None
+        try:
+            user = User.objects.get(token=token)
+        except User.DoesNotExist:
+            return JsonResponse(AccessDenied)
+            
+        markets = Market.objects.filter(owner=user)
+        
+        result = [marketSerializer(market) for market in markets]
+        return JsonResponse({"success": True, "data": result })
+    
+    @csrf_exempt
+    def getMarketById(request, pk):
+        if request.method != "GET":
+            return JsonResponse(MethodNotAllowed)
+        
+        market = None
+        try:
+            market = Market.objects.get(pk=pk)
+        except Market.DoesNotExist:
+            return JsonResponse(MarketNotExist)
+        
+        market = marketSerializer(market)
+        
+        return JsonResponse({"success": True, "data": market })
 # Market service end 
