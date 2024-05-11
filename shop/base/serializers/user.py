@@ -9,7 +9,10 @@ def userSerializer(data: User):
     result['image'] = data.image
     result['token'] = data.token
     result['rate'] = data.rate
-    result['birthDate'] = data.birthDate.strftime('%Y-%m-%d')
+    try:
+        result['birthDate'] = data.birthDate.strftime('%Y-%m-%d')
+    except AttributeError:
+        result['birthDate'] = data.birthDate
     result['role'] = data.role.name if data.role else ""
 
     return result

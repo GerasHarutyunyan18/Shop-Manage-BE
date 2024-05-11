@@ -1,16 +1,17 @@
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
 from django.views.decorators.csrf import csrf_exempt
-from .utils.errors import MethodNotAllowed, UserExist, UserNotExist, InvalidLoginCreds, AccessDenied, MarketNotExist
+from .utils.errors import MethodNotAllowed, UserExist, UserNotExist, InvalidLoginCreds, AccessDenied, MarketNotExist, ArgumentError
 from .utils.constants import SECRET_KEY
 from django.core.mail import send_mail
 from .utils.helpers import generateUserPassword
 from .serializers.user import userSerializer
 from .serializers.market import marketSerializer
+from .serializers.product import productSerializer
 import datetime
 import jwt
 from .utils.validators import signUpValidation, marketCreationValidation, userCreationValidation
-from .models import User, Market
+from .models import User, Market, Product
 from django.contrib.auth.hashers import make_password, check_password
 import json
 
@@ -127,6 +128,12 @@ class UserView:
             return JsonResponse(result)
 
         result = result['result']
+        
+        try:
+            result['market'] = Market.objects.get(pk=result['marketId'])
+            del result['marketId']
+        except Market.DoesNotExist:
+            return JsonResponse(MarketNotExist)
 
         creator = None
         try:
@@ -158,9 +165,10 @@ class UserView:
         send_mail(subject, message, sender, [recipient])
 
         result['token'] = token
-        user = User.objects.create(**result)
         
-        return JsonResponse({'success': True, "id": user.pk})
+        user = User.objects.create(**result)
+        user = userSerializer(user)
+        return JsonResponse({'success': True, "user": user})
 
     @csrf_exempt
     def getMe(request, token):
@@ -176,6 +184,32 @@ class UserView:
         result = userSerializer(user)
         return JsonResponse({"success": True, "user": result})
     
+    @csrf_exempt
+    def deleteUser(request):
+        if request.method != 'DELETE':
+            return JsonResponse(MethodNotAllowed)
+
+        data = json.loads(request.body)
+        token = data.get('ownerToken')
+        id = data.get('id')
+        if not token or not id:
+            return JsonResponse(ArgumentError())
+        
+        deletor = None
+        try:
+            deletor = User.objects.get(token=token)
+            if not deletor.market or not deletor.role or deletor.role.name != 'owner':
+                return JsonResponse(AccessDenied)
+            elif deletor.market:
+                worker = User.objects.get(pk=id, market=deletor.market)
+                if worker:
+                    worker.delete()
+                    return JsonResponse({ "success": True })
+                else:
+                    return JsonResponse(UserNotExist)
+        except User.DoesNotExist:
+            return JsonResponse(UserNotExist)
+
     @csrf_exempt
     def getByMarketId(request, marketPk):
         if request.method != 'GET':
@@ -248,3 +282,25 @@ class MarketView:
         
         return JsonResponse({"success": True, "data": market })
 # Market service end 
+
+# Product service start 
+class ProductView:
+    @csrf_exempt
+    def getProductsByMarketId(request, pk):
+        if request.method != "GET":
+            return JsonResponse(MethodNotAllowed)
+        
+        name = request.GET.get('name')
+        
+        productsObjects = []
+        
+        if name: 
+            productsObjects = Product.objects.filter(market__pk=pk, name=name)
+        else:
+            productsObjects = Product.objects.filter(market__pk=pk)
+            
+        products = [productSerializer(el) for el in productsObjects]
+            
+        return JsonResponse({"success": True, "data": products })
+# Product service end 
+    

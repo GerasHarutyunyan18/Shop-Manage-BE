@@ -33,7 +33,7 @@ def marketCreationValidation(data):
 
 
 def userCreationValidation(data):
-    fields = ['name', 'surname', 'email', 'birthDate', 'creatorToken']
+    fields = ['name', 'surname', 'email', 'birthDate', 'creatorToken', 'marketId']
     errors = []
     result = {}
 
